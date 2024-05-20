@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>버스 정보 검색</title>
+</head>
+<body>
+    <h1>버스 정보 검색</h1>
+    <label for="bus_stop_name">정류장명: </label>
+    <input type="text" id="bus_stop_name" name="bus_stop_name">
+    <button onclick="searchBusStop()">검색</button>
+
+    <div id="bus_stop_list"></div>
+    <div id="bus_info"></div>
+
+    <script>
+        async function searchBusStop() {
+            const busStopName = document.getElementById('bus_stop_name').value;
+            const response = await fetch('/search_bus_stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    bus_stop_name: busStopName
+                })
+            });
+            const busStopList = await response.json();
+            const busStopListDiv = document.getElementById('bus_stop_list');
+            busStopListDiv.innerHTML = '';
+            busStopList.forEach(node => {
+                const nodeDiv = document.createElement('div');
+                nodeDiv.textContent = `정류장명: ${node.nodenm}`;
+                nodeDiv.style.cursor = 'pointer'; // 마우스 커서를 포인터로 변경
+                nodeDiv.addEventListener('click', () => getBusInfo(node.nodeid, node.nodenm)); // 클릭 시 해당 정류장 정보 가져오기
+                busStopListDiv.appendChild(nodeDiv);
+            });
+        }
+
+        async function getBusInfo(nodeId, nodeName) {
+            const response = await fetch('/get_bus_info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    selected_index: 0,
+                    selected_node_id: nodeId
+                })
+            });
+            const busInfo = await response.json();
+            const busInfoDiv = document.getElementById('bus_info');
+            busInfoDiv.innerHTML = `<h2>${nodeName}</h2>`; // 선택된 정류장명을 표시
+            busInfo.forEach(bus => {
+                const busInfoItemDiv = document.createElement('div');
+                busInfoItemDiv.textContent = `노선번호: ${bus.routeno}, 남은 정류장 수: ${bus.arrprevstationcnt}, 도착 예정 시간: ${bus.arrival_time}, 혼잡도: ${bus.congestion_level}`;
+                busInfoDiv.appendChild(busInfoItemDiv);
+            });
+        }
+    </script>
+</body>
+</html>
