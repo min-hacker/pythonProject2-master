@@ -208,6 +208,19 @@ def fetch_bus_station_info(station_name):
         print(f"Error occurred: {e}")
         return None
 
+def fetch_bus_station_info(station_name):
+    try:
+        url = f"http://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnNoList?serviceKey={key}&cityCode=22&nodeNm={station_name}&nodeNo=&numOfRows=1000&pageNo=1&_type=xml"
+        content = requests.get(url).content
+        data = xmltodict.parse(content)
+        items = data['response']['body']['items']['item']
+        if not isinstance(items, list):
+            items = [items]
+        return items
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return None
+
 def fetch_bus_route_info(station_id, station_name):
     try:
         url = f"http://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnThrghRouteList?serviceKey={key}&cityCode=22&nodeid={station_id}&numOfRows=1000&pageNo=1&_type=xml"
@@ -220,10 +233,11 @@ def fetch_bus_route_info(station_id, station_name):
         for item in items:
             bus_number = item.get('routeno', '')
             route_id = item.get('routeid')
+            route_type = item.get('routetp', '')
             route_path = fetch_route_path(route_id)
             for path in route_path:
                 if any(station == station_name for station, _, _, _ in path):
-                    routes.append((bus_number, route_id, path))
+                    routes.append((bus_number, route_id, route_type, path))
                     break
         return routes
     except Exception as e:
@@ -261,9 +275,9 @@ def fetch_route_path(route_id):
 def find_intermediate_stations(start_routes, end_routes):
     common_stations = []
     for start_route in start_routes:
-        for start_station, _, _, _ in start_route[2]:
+        for start_station, _, _, _ in start_route[3]:
             for end_route in end_routes:
-                for end_station, _, _, _ in end_route[2]:
+                for end_station, _, _, _ in end_route[3]:
                     if start_station == end_station:
                         common_stations.append((start_station, start_route[0], end_route[0]))
     return common_stations
@@ -346,9 +360,10 @@ def route_info():
 
         if direct_routes:
             direct_routes_info = []
-            for route_id, _, route_path in direct_routes:
+            for route_id, _, route_type, route_path in direct_routes:
                 route_info = {
                     "bus_number": route_id,
+                    "route_type": route_type,
                     "start_station": start_station_name,
                     "end_station": end_station_name,
                     "total_distance": 0,
@@ -383,7 +398,7 @@ def route_info():
                     distance_intermediate_to_end = 0
                     for start_route in start_routes:
                         if start_route[0] == start_bus:
-                            start_route_path = start_route[2]
+                            start_route_path = start_route[3]
                             idx_start_station = next(
                                 (idx for idx, (s, _, _, _) in enumerate(start_route_path) if s == start_station_name), None)
                             idx_intermediate_station = next(
@@ -395,7 +410,7 @@ def route_info():
                                     distance_start_to_intermediate += haversine(coord1, coord2)
                     for end_route in end_routes:
                         if end_route[0] == end_bus:
-                            end_route_path = end_route[2]
+                            end_route_path = end_route[3]
                             idx_intermediate_station = next(
                                 (idx for idx, (s, _, _, _) in enumerate(end_route_path) if s == station), None)
                             idx_end_station = next(
@@ -417,7 +432,9 @@ def route_info():
                     intermediate_stations_info.append({
                         "station": station,
                         "start_bus": start_bus,
+                        "start_route_type": next((r[2] for r in start_routes if r[0] == start_bus), ""),
                         "end_bus": end_bus,
+                        "end_route_type": next((r[2] for r in end_routes if r[0] == end_bus), ""),
                         "distance_start_to_intermediate": round(distance_start_to_intermediate, 1),
                         "distance_intermediate_to_end": round(distance_intermediate_to_end, 1),
                         "total_distance": total_distance,
